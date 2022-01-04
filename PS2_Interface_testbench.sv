@@ -234,7 +234,6 @@ module sim_top();
         else begin
             $display("FAILED: INCORRECT DIRECTION\n");
         end
-        //DO SOMETHING FOR INVALID PACKETS (correctly ignoring or flagging invalid packets VS incorrectly accepting/not flagging invalid packets)
   end
      
   always @(posedge DRIVER.PS2_clk or negedge DRIVER.PS2_clk) begin//Pass clock and data from driver to the registers (these then go to the design)
