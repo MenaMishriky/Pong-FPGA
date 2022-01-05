@@ -40,7 +40,7 @@ class packet_class; //33bit packet for the PS2 interface
             this.Y_speed = Y_speed;
             this.P2 = P2;
             this.stop2 = stop2;
-            valid = (!start1 && stop1 && !start2 && stop2 && !first_word[0] && first_word[10] && !first_word[3] && first_word[4])? 1'b1 : 1'b0;
+            valid = (!start1 && stop1 && !start2 && stop2 && first_word[0] && !first_word[10] && !first_word[7] && first_word[6])? 1'b1 : 1'b0;
         end
         else begin //random but VALID packet (starts = 0, stops = 1, and first_word[3,4] = 2'b01
             bit [6:0] random_bits = $urandom_range(128);
@@ -180,7 +180,7 @@ module sim_top();
    //outputs
    reg paddle0_direction_out;
    reg [7:0] paddle0_speed_out;
-   reg valid_out;
+   reg invalid_out;
    
    //for the checker
    bit [32:0] input_buffer [$];//input from the driver
@@ -217,18 +217,18 @@ module sim_top();
         
         //should we have a delay?
         
-        if (paddle0_direction_out == input_buffer[checker_counter][6]) begin//correct direction
-            if ( (input_buffer[checker_counter][8] && (paddle0_speed_out == 8'hff)) || (!input_buffer[checker_counter][8] && (paddle0_speed_out == input_buffer[checker_counter][30:23])) ) begin//correct speed/overflow
-                if(valid_out == DRIVER.good_data[0].valid) begin
+        if (paddle0_direction_out == input_buffer[checker_counter][26]) begin//correct direction
+            if ( (input_buffer[checker_counter][24] && (paddle0_speed_out == 8'hff)) || (!input_buffer[checker_counter][24] && (paddle0_speed_out == {input_buffer[checker_counter][2],input_buffer[checker_counter][3],input_buffer[checker_counter][4],input_buffer[checker_counter][5],input_buffer[checker_counter][6],input_buffer[checker_counter][7],input_buffer[checker_counter][8],input_buffer[checker_counter][9]})) ) begin//correct speed/overflow
+                if(invalid_out == !DRIVER.good_data[0].valid) begin
                     $display("PACKET SUCCESSFULLY COMPARED!\n");
                 end
                 else begin
-                    $display("FAILED: PACKET VALIDITY NOT CORRECTLY COMPARED! EXPECTED %s, GOT %s",DRIVER.good_data[0].valid, valid_out);
+                    $display("FAILED: PACKET VALIDITY NOT CORRECTLY COMPARED! EXPECTED %s, GOT %s",DRIVER.good_data[0].valid, invalid_out);
                 end
             end 
             else begin
-                if(input_buffer[checker_counter][8]) $display("FAILED: SPEED OVERFLOW NOT HANDLED PROPERLY\n");
-                else $display("FAILED: INCORRECT SPEED. EXPECTED %d, GOT %d\n", input_buffer[checker_counter][30:23], paddle0_speed_out);
+                if(input_buffer[checker_counter][24]) $display("FAILED: SPEED OVERFLOW NOT HANDLED PROPERLY\n");
+                else $display("FAILED: INCORRECT SPEED. EXPECTED %d, GOT %d\n", {input_buffer[checker_counter][2],input_buffer[checker_counter][3],input_buffer[checker_counter][4],input_buffer[checker_counter][5],input_buffer[checker_counter][6],input_buffer[checker_counter][7],input_buffer[checker_counter][8],input_buffer[checker_counter][9]}, paddle0_speed_out);
             end
         end
         else begin
