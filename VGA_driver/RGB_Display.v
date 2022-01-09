@@ -26,6 +26,7 @@ module RGB_Display(input clk_pxl,
                    input de,
                    input reset,
                    input [9:0] paddle0_pos_y,
+                   input [9:0] paddle1_pos_y,
                    input [9:0] ball_pos_x,
                    input [9:0] ball_pos_y,
                    output wire [3:0] vga_red,
@@ -55,10 +56,11 @@ always @(posedge clk_pxl or posedge reset) begin
              border <= 0;
         end
 end
-//we enable drawing only when we are in the border place, ball place, or paddle place
+//we enable drawing only when we are in the border place, ball place, paddle0 place, or paddle 1 place
 assign draw_en = (border) 
                  ||((sx >= ball_pos_x)&&(sx< (ball_pos_x + ball_size)) && (sy>= ball_pos_y) &&(sy < (ball_pos_y + ball_size))) 
-                 || ( (sy >= paddle0_pos_y) && (sy < (paddle0_pos_y + paddle_size_y)) && (sx < paddle_size_x) );
+                 || ( (sy >= paddle0_pos_y) && (sy < (paddle0_pos_y + paddle_size_y)) && (sx < paddle_size_x) )
+                 || ( (sy >= paddle1_pos_y) && (sy < (paddle1_pos_y + paddle_size_y)) && (sx > 'd639 - paddle_size_x) && (sx < 'd639) );
  
  //we are drawing in white on black background only
 assign vga_red = (draw_en && de)? 4'hf: 0;
