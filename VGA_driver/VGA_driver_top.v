@@ -21,6 +21,7 @@
 
 
 module VGA_driver_top(//input [9:0] paddle0_pos,//FOR NOW THESE ARE const Parameters (testing purposes)
+                      //input [9:0] paddle1_pos,
                       //input [9:0] ball_pos_x,//BUT later these should come from another block *****
                       //input [9:0] ball_pos_y,
                       input clk_100MHz,
@@ -48,6 +49,7 @@ module VGA_driver_top(//input [9:0] paddle0_pos,//FOR NOW THESE ARE const Parame
  
  //FOR NOW THESE ARE INITIALIZED (testing purposes), but later they should come from the other block******
  wire [9:0] paddle0_pos = 'd60;
+ wire [9:0] paddle1_pos = 'd60;
  wire [9:0] ball_pos_x = 'd200;
  wire [9:0] ball_pos_y = 'd60;
  
@@ -66,6 +68,7 @@ module VGA_driver_top(//input [9:0] paddle0_pos,//FOR NOW THESE ARE const Parame
                      .de(de_int),
                      .reset(reset),
                      .paddle0_pos_y(paddle0_pos),
+                     .paddle1_pos_y(paddle1_pos),
                      .ball_pos_x(ball_pos_x),
                      .ball_pos_y(ball_pos_y),
                      .vga_red(red_VGA),
