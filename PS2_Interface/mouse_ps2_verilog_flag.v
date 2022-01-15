@@ -8,7 +8,7 @@
 // TO DO: remake always block for new_output_flag
 `timescale 1ns / 1ps
 module mouse_ps2_verilog( input wire clk_25MHz,
-                       input wire clk,
+                       input wire ps2_clk,
                        input wire data_in,
                        input wire reset,
                        output reg paddle_dir,
@@ -18,62 +18,63 @@ module mouse_ps2_verilog( input wire clk_25MHz,
         reg [32:0] ps2_data;                                                    // big register to hold 33-bit mouse data
         reg [5:0] bit_counter;                                                  // 0-33 counter to make sure all bits are present
         reg new_output_history;
-        always @(negedge ps2_data or posedge reset) begin
+        always @(negedge ps2_clk or posedge reset) begin
             // Initialize
             if (reset) begin
                 ps2_data <= 0;
                 bit_counter <= 0;
             end
-            // Assign data_in to ps2_data by shifting right (LSB)
-            ps2_data[32] <= data_in;
-            ps2_data[31:0] <= ps2_data[32:1];
-            // Check if all data is received, counter should have 33 bits
-            if (bit_counter < 32) begin
-                bit_counter <= bit_counter + 1;
+            else begin
+                // Assign data_in to ps2_data by shifting right (LSB)
+                ps2_data[32] <= data_in;
+                ps2_data[31:0] <= ps2_data[32:1];
+                // Check if all data is received, counter should have 33 bits
+                if (bit_counter < 33) begin
+                    bit_counter <= bit_counter + 1;
+                end
+                else
+                    bit_counter <= 1;                                               // received all bits
+                // Conduct valid checker : check if the start and/or stop bits are correct for each word in MSB
+                if (ps2_data[32] == 0) begin                                        // stop bit, third word
+                    error_flag <= 1;
+                end
+                else if (ps2_data[22] == 1)                                         // start bit, third word
+                    error_flag <= 1;
+                else if (ps2_data[21] == 0)                                         // stop bit, second word
+                    error_flag <= 1;
+                else if (ps2_data[11] == 1)                                         // start bit, second word
+                    error_flag <= 1;
+                else if (ps2_data[10] == 0)                                         // stop bit, first word
+                    error_flag <= 1;
+                else if (ps2_data[4] == 0)                                          // bit 4 must be 1, first word
+                    error_flag <= 1;
+                else if (ps2_data[3] == 1)                                          // bit 3 must be 0, first word
+                    error_flag <= 1;
+                else if (ps2_data[0] == 1)                                          // start bit, first word
+                    error_flag <= 1;
+                else
+                    error_flag <= 0;
+                    
+                // Convert binary to decimal values and parse paddle speed and paddle direction
+                paddle_speed <= ps2_data[9] ? 8'hff : ps2_data[30:23];
+                paddle_dir <= ps2_data[6];
             end
-            else
-                bit_counter <= 0;                                               // received all bits
-            // Conduct valid checker : check if the start and/or stop bits are correct for each word
-            if (ps2_data[32] == 1) begin                                        // start bit, first word
-                error_flag <= 1;
-            end
-            else if (ps2_data[22] == 0)                                         // stop bit, first word
-                error_flag <= 1;
-            else if (ps2_data[21] == 1)                                         // start bit, second word
-                error_flag <= 1;
-            else if (ps2_data[11] == 0)                                         // stop bit, second word
-                error_flag <= 1;
-            else if (ps2_data[10] == 1)                                         // start bit, third word
-                error_flag <= 1;
-            else if (ps2_data[0] == 0)                                          // stop bit, third word
-                error_flag <= 1;
-            else
-                error_flag <= 0;
-                
-            // Convert binary to decimal values and parse paddle speed and paddle direction
-            paddle_speed <= ps2_data[9:2];
-            paddle_dir <= ps2_data[26];
-        end
-        
-        always @(posedge clk_25MHz) begin
-            // Lower flag
-            new_output_flag = 0;
         end
          
-        always @(posedge clk_25MHz of posedge reset) begin
+        always @(posedge clk_25MHz or posedge reset) begin
             if (reset) begin
                new_output_flag <= 0;
                new_output_history <= 0;
-            endz
-            else if(bit_counter == 0) begin
+            end
+            else if((bit_counter == 0) || (bit_counter == 1)) begin
                 new_output_flag <= 0;
                 new_output_history <= 0;
             end
             else if( (bit_counter == 33)&&(!error_flag)&&(!new_output_history)) begin
-                new_outut_flag <= 1'b1;
+                new_output_flag <= 1'b1;
                 new_output_history <= 1'b1;
             end
             else
-                new_output_flag <= 1'b0
+                new_output_flag <= 1'b0;
         end
 endmodule
