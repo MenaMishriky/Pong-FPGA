@@ -17,8 +17,13 @@ module mouse_ps2_verilog( input wire clk_25MHz,
                        output reg new_output_flag);
         reg [32:0] ps2_data;                                                    // big register to hold 33-bit mouse data
         reg [5:0] bit_counter;                                                  // 0-33 counter to make sure all bits are present
-        
-        always @(negedge ps2_data) begin
+        reg [5:0] buffer_counter;
+        always @(negedge ps2_data or posedge reset) begin
+            // Initialize
+            if (reset) begin
+                ps2_data <= 0;
+                bit_counter <= 0;
+            end
             // Assign data_in to ps2_data by shifting right (LSB)
             ps2_data[32] <= data_in;
             ps2_data[31:0] <= ps2_data[32:1];
@@ -55,9 +60,18 @@ module mouse_ps2_verilog( input wire clk_25MHz,
             new_output_flag = 0;
          end
          
-        always @(posedge clk_25MHz) begin
+        always @(posedge clk_25MHz of posedge reset) begin
+            if (reset) begin
+                new_output_flag <= 1'b0;
+            end
+            // Produce a buffer counter
+             if (buffer_counter < 32) begin
+                buffer_counter <= buffer_counter + 1;
+            end
+            else
+                buffer_counter <= 0; 
             // Raise new output flag if error flag is == 0 && bit_counter
-            if (error_flag == 0)
-                new_output_flag = 1;
+            if ((!error_flag) && (bit_counter == 0))
+                new_output_flag <= 1'b1;
         end
 endmodule
