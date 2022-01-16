@@ -71,7 +71,7 @@ class driver_class #(int packets = 1, int delay = 0);//packets = number of packe
   bit [32:0] buffer;//used to put the data generated into a buffer (which is then used by the checker)
   
   function new ();
-        this.PS2_clk = 1'b1;
+        this.PS2_clk = 1'b0;
         this.PS2_data = 1'b1;
   endfunction
   
@@ -86,7 +86,7 @@ class driver_class #(int packets = 1, int delay = 0);//packets = number of packe
        second_word_done = 0;
        third_word_done = 0;
        
-       PS2_clk = 1'b1;
+       PS2_clk = 1'b0;
        PS2_data = 1'b1;
        
        packet_counter = 0;
@@ -158,6 +158,7 @@ class driver_class #(int packets = 1, int delay = 0);//packets = number of packe
                         second_word_done = 0;
                         third_word_done = 0;
                         packet_counter ++;
+                        $display("PACKET_SENT\n");
                         #delay; //normally 0 for continuous data. for  burst, give this a value close to 2000us which is 2000000ns
                         if (packet_counter == packets)  break;//if we drove all packets, exit 
                    end
@@ -177,10 +178,13 @@ module sim_top();
    //inputs
    reg PS2_clk_t;
    reg PS2_data_t;
+   reg clk_25MHz;
+   reg reset;
    //outputs
    reg paddle0_direction_out;
    reg [7:0] paddle0_speed_out;
    reg invalid_out;
+   reg new_output_flag;
    
    //for the checker
    bit [32:0] input_buffer [$];//input from the driver
@@ -188,16 +192,24 @@ module sim_top();
    
    //delay is between packets (in ns, give 5000000 for burst mode, 0 for continuous), packets = num of packets to drive
    //in continuous mode, what happens is we get stop - 1cycle- start.....stop - 1 cycle -start
-   driver_class #(.packets(3), .delay(0)) DRIVER  = new();
+   driver_class #(.packets(3), .delay(10000000)) DRIVER  = new();
+    mouse_ps2_verilog DUT(.clk_25MHz(clk_25MHz),
+                          .ps2_clk(PS2_clk_t),
+                          .data_in(PS2_data_t),
+                          .reset(reset),
+                          .paddle_dir(paddle0_direction_out),
+                          .paddle_speed(paddle0_speed_out),
+                          .error_flag(invalid_out),
+                          .new_output_flag(new_output_flag)
+                      );
+                      
+  always #20 clk_25MHz = ~clk_25MHz; 
    
-   
-   /*
-       DUT INSTANTIATION AND CONNECT TO I/O
-   */
-   
-    
-       
   initial begin
+              clk_25MHz = 0;
+              reset = 1;
+              #50
+              reset = 0;
              //Pass the bits in the order you want to see them, so its randoms, start, LMB,.......,stop
              //first argument determines if you want to randmoize
              //if you want multiple packets, you can either choose random or have all the packets to be the same, which you customize through the args
@@ -211,34 +223,45 @@ module sim_top();
   end
 
 //when packet is sent from driver to PS2, check the PS2 output (MONITOR)
-  always @(DRIVER.packet_counter) begin 
-        $display("PACKET_SENT\n");
+  always @(posedge new_output_flag) begin 
         $display("COMPARING PACKET...\n");
-        
-        //should we have a delay?
-        
         if (paddle0_direction_out == input_buffer[checker_counter][26]) begin//correct direction
             if ( (input_buffer[checker_counter][24] && (paddle0_speed_out == 8'hff)) || (!input_buffer[checker_counter][24] && (paddle0_speed_out == {input_buffer[checker_counter][2],input_buffer[checker_counter][3],input_buffer[checker_counter][4],input_buffer[checker_counter][5],input_buffer[checker_counter][6],input_buffer[checker_counter][7],input_buffer[checker_counter][8],input_buffer[checker_counter][9]})) ) begin//correct speed/overflow
                 if(invalid_out == !DRIVER.good_data[0].valid) begin
                     $display("PACKET SUCCESSFULLY COMPARED!\n");
+                    checker_counter ++;
                 end
                 else begin
                     $display("FAILED: PACKET VALIDITY NOT CORRECTLY COMPARED! EXPECTED %s, GOT %s",DRIVER.good_data[0].valid, invalid_out);
+                    checker_counter ++;
                 end
             end 
             else begin
-                if(input_buffer[checker_counter][24]) $display("FAILED: SPEED OVERFLOW NOT HANDLED PROPERLY\n");
-                else $display("FAILED: INCORRECT SPEED. EXPECTED %d, GOT %d\n", {input_buffer[checker_counter][2],input_buffer[checker_counter][3],input_buffer[checker_counter][4],input_buffer[checker_counter][5],input_buffer[checker_counter][6],input_buffer[checker_counter][7],input_buffer[checker_counter][8],input_buffer[checker_counter][9]}, paddle0_speed_out);
+                if(input_buffer[checker_counter][24]) begin
+                     $display("FAILED: SPEED OVERFLOW NOT HANDLED PROPERLY\n");
+                     checker_counter ++;
+                end
+                else begin 
+                    $display("FAILED: INCORRECT SPEED. EXPECTED %d, GOT %d\n", {input_buffer[checker_counter][2],input_buffer[checker_counter][3],input_buffer[checker_counter][4],input_buffer[checker_counter][5],input_buffer[checker_counter][6],input_buffer[checker_counter][7],input_buffer[checker_counter][8],input_buffer[checker_counter][9]}, paddle0_speed_out);
+                    checker_counter ++;
+                end
             end
         end
         else begin
             $display("FAILED: INCORRECT DIRECTION\n");
+            checker_counter ++;
         end
   end
      
-  always @(posedge DRIVER.PS2_clk or negedge DRIVER.PS2_clk) begin//Pass clock and data from driver to the registers (these then go to the design)
-          PS2_clk_t = DRIVER.PS2_clk;
-          PS2_data_t = DRIVER.PS2_data;
+  always @(posedge DRIVER.PS2_clk or negedge DRIVER.PS2_clk or posedge reset) begin//Pass clock and data from driver to the registers (these then go to the design)
+          if(reset) begin
+            PS2_clk_t = 1'b0;
+            PS2_data_t = 1'b1;
+          end
+          else begin
+              PS2_clk_t = DRIVER.PS2_clk;
+              PS2_data_t = DRIVER.PS2_data;
+          end
   end
    
 endmodule
