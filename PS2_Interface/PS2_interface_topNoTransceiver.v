@@ -1,11 +1,11 @@
 // This module is responsible for decoding the signals from the mouse and converting them to decimal values
 // for the paddle direction and paddle speed.
-// 4 main functionalities:
-// 1. Decode mouse signals (if all 3 words arrive and are 11 bits in length) and store in registers
-// 2. Raise an error flag if the start and/or stop bits of each word is incorrect
-// 3. Raise a new_output_flag when a new speed/dir is available, then goes low when after 1 cycle
-// 4. Convert bits into paddle direction and paddle speed
-// TO DO: remake always block for new_output_flag
+// 5 main functionalities:
+// 1. Transmit special commands to the mouse for data reporting to feed into data_in
+// 2. Decode mouse signals (if all 3 words arrive and are 11 bits in length) and store in registers
+// 3. Raise an error flag if the start and/or stop bits of each word is incorrect
+// 4. Raise a new_output_flag when a new speed/dir is available, then goes low when after 1 cycle
+// 5. Convert bits into paddle direction and paddle speed
 `timescale 1ns / 1ps
 module mouse_ps2_verilog( input wire clk_25MHz,
                        input wire ps2_clk,
@@ -17,8 +17,15 @@ module mouse_ps2_verilog( input wire clk_25MHz,
                        output reg new_output_flag);
         reg [32:0] ps2_data;                                                    // big register to hold 33-bit mouse data
         reg [5:0] bit_counter;                                                  // 0-33 counter to make sure all bits are present
-        reg new_output_history;
+        reg new_output_history;                                                 // flag history to validate that new output is indeed present
         
+        reg [10:0] special_command;                                             //holds special commands (eg: enable reporting)
+        reg [3:0] special_counter;                                              //counter for special commands
+        
+        
+        // Always block that controls transmitting to the mouse
+
+
         always @(posedge ps2_clk or posedge reset) begin
             // Conduct valid checker : check if the start and/or stop bits are correct for each word in MSB
             if (reset) begin
