@@ -5,11 +5,11 @@ module mouse_ctrl_fsm ( input wire clk_25MHz,
                     input busy,
                     input err,
                     output reg y_dir,
+                    output reg y_max_speed,
                     output reg [7:0] y_speed,
                     output new_out,
                     output reg [10:0] F4_command,
                     output write);
-
 // Definition for constant states
 parameter IDLE_RESET = 'd0;
 parameter BUSY_CHECK = 'd1;
@@ -31,8 +31,6 @@ parameter EN_REPORTING = 11'b10111101000;
 reg [3:0] state, next_state;
 reg [2:0] word_counter;
 reg valid_1, valid_2, valid_3;
-reg bad_data;
-reg [3:0] bit_counter;
 reg [10:0] data_in;                 // internal signal for rx_data assigned at IDLE_REPORTING state
 reg data_flag;
 
@@ -66,8 +64,7 @@ always @* begin
                   else if (busy && !data_flag)                           next_state = BUSY_CHECK;
       end
       WRITE_F4: begin
-                  // here need to toggle write to high, and shift in the F4 command to tx_data
-                  // What does the FSM need to control here? How does it know to move on to WAIT_ACK?
+                  // here the write flag toggles high, and we write F4 command to tx_data line
                   if (write)                                             next_state = WAIT_ACK;
                   else                                                   next_state = WRITE_F4;
       end 
@@ -76,7 +73,6 @@ always @* begin
                   else                                                   next_state = WAIT_ACK;
       end
       IDLE_REPORTING: begin
-                  // How will idle_reporting differentiate between word1 and word2 in state machine?
                   if (data_flag)                                         next_state = WORD1;
       end
       WORD1: begin
@@ -96,10 +92,7 @@ always @* begin
                   else                                                   next_state = WORD3;
       end
       INVALID_DATA: begin
-                  if (!valid_1)                                          next_state = IDLE_REPORTING;
-                  else if (!valid_2)                                     next_state = IDLE_REPORTING;
-                  else if (!valid_3)                                     next_state = IDLE_REPORTING;
-                  else                                                   next_state = IDLE_REPORTING;
+                                                                         next_state = IDLE_REPORTING;
       end
       default: begin
                   next_state = IDLE_RESET;
@@ -108,7 +101,7 @@ always @* begin
   end
 end
 
-// combinational logic
+// sequential  logic
 always @ (posedge reset or posedge clk_25MHz) begin
   // initialize variables
   if (reset) begin
@@ -119,9 +112,7 @@ always @ (posedge reset or posedge clk_25MHz) begin
     valid_2 <= 1'b0;
     valid_3 <= 1'b0;
     F4_command <= 11'b10101010101;
-    bad_data <= 1'b0;
     y_speed <= 8'b00000000;
-    bit_counter <= 0;
   end
   else begin
     // default values again
@@ -132,80 +123,53 @@ always @ (posedge reset or posedge clk_25MHz) begin
     valid_2 <= 1'b0;
     valid_3 <= 1'b0;
     F4_command <= 11'b10101010101;
-    bad_data <= 1'b0;
     y_speed <= 8'b00000000;
-    bit_counter <= 0;
     case (next_state)
       IDLE_RESET: begin
-                    // no combinational logic here
+                    // no sequential logic here
                   end
       BUSY_CHECK: begin
-                    // no combinational logic here, waiting on inputs to update
+                    // no sequential logic here, waiting on inputs to update
                   end
       WRITE_F4: begin
-                  // set write to high, make F4_command = ENABLE_REPORTING
-                  // shift data right from F4_command to tx_data on PS2_block coming in from left
-                  bit_counter <= bit_counter + 1;
-                  F4_command[10] <= EN_REPORTING;
-                  F4_command[9:0] <= F4_command[10:1];
+                  // make F4_command = ENABLE_REPORTING
+                  F4_command <= EN_REPORTING;
                 end
       WAIT_ACK: begin
-                  // waiting on data_in
-                  // shifting data right in from data_in coming from left?
-                  bit_counter <= bit_counter + 1;
-                  data_in[10] <= data_in;
-                  data_in[9:0] <= data_in[10:1];
+                  // waiting on data_in, 
                 end
       IDLE_REPORTING: begin
                         // like a soft reset, getting ready to report words
                       end
       WORD1: begin
-              // shift data_in
-              bit_counter <= bit_counter + 1;
-              data_in[10] <= data_in;
-              data_in[9:0] <= data_in[10:1];
               // check if bits 7, 6 (or bits 3, 4 depending on shifting) are 0,1 and parity bit = 0
-              if ((data_in[7] == 0) && (data_in[6] == 1) && (data_in[1] == 0
-              )) begin
+              if ((data_in[3] == 0) && (data_in[4] == 1) && (data_in[9] == 0)) begin
                 valid_1 <= 1'b1;
               end
               else
                 valid_1 <= 1'b0;
-              // grab y-dir
+              // grab y-dir and y-max-speed
               y_dir <= data_in[4];
-              // Y-direction overflow bit necessary? I forgot ...
+              y_max_speed <= data_in[8];
               word_counter <= 'd2; 
             end
       WORD2: begin
-              // shift data_in (X-axis)
-              bit_counter <= bit_counter + 1;
-              data_in[10] <= data_in;
-              data_in[9:0] <= data_in[10:1];
               // don't care to check tho just move the state
-              if (data_in[1] == 0)          valid_2 <= 1'b1;
+              if (data_in[9] == 0)          valid_2 <= 1'b1;
               else                          valid_2 <= 1'b0;
               word_counter <= 'd3;
       end
       WORD3: begin
-            // shift data_in (Y-axis)
-            bit_counter <= bit_counter + 1;
-            data_in[10] <= data_in;
-            data_in[9:0] <= data_in[10:1];
+            // new out is already flagged high when it reaches this state, may need to change it
             // check parity
-            if (data_in[1] == 0) begin
-              bit_counter <= 0;             // restart bit counter
-              // shift right data_in into y_speed coming in from left
-              bit_counter <= bit_counter + 1;
-              y_speed[7] <= data_in[9:2];
-              y_speed[6:0] <= y_speed[7:1];
+            if (data_in[9] == 0) begin
+              y_speed <= data_in;
               valid_3 <= 1'b1;
             end
             else                            valid_3 <= 1'b0;
       end
       INVALID_DATA: begin
-        // no combinational logic, just need to switch states from words to idle_reporting
-        // maybe raise a flag
-        bad_data <= 1'b1;
+        // no sequential logic, just need to switch states from words to idle_reporting
       end
     endcase
   end
