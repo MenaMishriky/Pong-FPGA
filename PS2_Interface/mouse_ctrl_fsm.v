@@ -122,7 +122,7 @@ always @ (posedge reset or posedge clk_25MHz) begin
     valid_1 <= 1'b0;
     valid_2 <= 1'b0;
     valid_3 <= 1'b0;
-    F4_command <= 11'b10101010101;
+    F4_command <= EN_REPORTING;
     y_speed <= 8'b00000000;
     case (next_state)
       IDLE_RESET: begin
