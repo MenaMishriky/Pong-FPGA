@@ -77,7 +77,7 @@ module PS2_interf_low_lvl(inout PS2_clk,
   //Simplified one-hot state encoding
   
  //delay counters, ensure counters ony count in the right state , and they have to reset once they exit their counting state
- always @(posedge PS2_clk or posedge reset) begin
+ always @(posedge clk_25MHz or posedge reset) begin
     if (reset) begin
         delay_100micro_counter <= 0;
         delay_20micro_counter <=0;
@@ -263,7 +263,7 @@ module PS2_interf_low_lvl(inout PS2_clk,
                          end
             state[TX_WAIT_ACK]: begin
                             //next state logic
-                            if (!PS2_data)
+                            if (!PS2_data &!PS2_clk) //MODIFICATION: WE HAVE TO RECEIVE ACK AT NEGEDGE of clock TO AVOID COUNTING THE LAST NEGEDGE AS AN RX NEGEDGE)
                                 next_state[TX_ACK_RECEIVED] = 1'b1;
                             else if (&delay_200_micro_counter)
                                 next_state[TX_ERROR] = 1'b1;
@@ -277,7 +277,10 @@ module PS2_interf_low_lvl(inout PS2_clk,
                       end 
             state[TX_ACK_RECEIVED]: begin
                                 //next state logic
-                                next_state[IDLE] = 1'b1;
+                                if (PS2_clk)//MODIFICATION   we have to wait till clock goes high before going to idle, otherwise we will immediately go to RX negedge from there
+                                  next_state[IDLE] = 1'b1;
+                                else
+                                  next_state[TX_ACK_RECEIVED] = 1'b1;
                                 
                              end
             default: begin
@@ -312,6 +315,7 @@ module PS2_interf_low_lvl(inout PS2_clk,
             rx_parity_ok <= 1'b1;
            case (1'b1) //note that assignments here replace (not just overwrite) default assignment
               next_state[IDLE]: begin
+                     rx_data <= rx_data;//MODIFICATION keep data received at IDLE too, in case we need it for some reason. (at reset its set to 101010...1010 anyway so no confusion with any sensible received data)
                     //no change needed    
                     end
               next_state[RX_CLK_NEGEDGE]: begin
@@ -364,9 +368,10 @@ module PS2_interf_low_lvl(inout PS2_clk,
                                 PS2_clk_out <= 1'b0;
                               end
               next_state[TX_REL_CLK]: begin
-                           tx_data_int <= tx_data_int;
                            PS2_data_out <= 1'b0;
                            PS2_clk_out <= 1'b1;
+                           //shift since mouse jut read the start MODIFICATIN. technically this should be in next state, but I put it here to avoid shifting multiple times since this state only happens for 1 clk cycle
+                           tx_data_int[9:0] <= tx_data_int[10:1];
                           end
               next_state[TX_WAIT_FIRST_CLK_H]: begin
                                      PS2_clk_out <= 1'b1;//probaby not needed but just to be safe
