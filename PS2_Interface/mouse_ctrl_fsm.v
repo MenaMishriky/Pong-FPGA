@@ -61,7 +61,7 @@ always @* begin
       end
       BUSY_CHECK: begin
                   if (!busy && !data_flag)                               next_state = WRITE_F4;
-                  else if (busy && !data_flag)                           next_state = BUSY_CHECK;
+                  else                                                   next_state = BUSY_CHECK;
       end
       WRITE_F4: begin
                   // here the write flag toggles high, and we write F4 command to tx_data line
@@ -74,6 +74,7 @@ always @* begin
       end
       IDLE_REPORTING: begin
                   if (data_flag)                                         next_state = WORD1;
+                  else                                                   next_state = IDLE_REPORTING;
       end
       WORD1: begin
                   // stay here until all 11 bits are shifted into word1 reg
@@ -95,8 +96,8 @@ always @* begin
                                                                          next_state = IDLE_REPORTING;
       end
       default: begin
-                  next_state = IDLE_RESET;
-               end
+                                                                         next_state = IDLE_RESET;
+      end
     endcase
   end
 end
@@ -143,7 +144,7 @@ always @ (posedge reset or posedge clk_25MHz) begin
                       end
       WORD1: begin
               // check if bits 7, 6 (or bits 3, 4 depending on shifting) are 0,1 and parity bit = 0
-              if ((data_in[3] == 0) && (data_in[4] == 1) && (data_in[9] == 0)) begin
+              if ((data_in[3] == 0) && (data_in[4] == 1) && !err) begin
                 valid_1 <= 1'b1;
               end
               else
@@ -155,14 +156,14 @@ always @ (posedge reset or posedge clk_25MHz) begin
             end
       WORD2: begin
               // don't care to check tho just move the state
-              if (data_in[9] == 0)          valid_2 <= 1'b1;
+              if (!err)                     valid_2 <= 1'b1;
               else                          valid_2 <= 1'b0;
               word_counter <= 'd3;
       end
       WORD3: begin
             // new out is already flagged high when it reaches this state, may need to change it
             // check parity
-            if (data_in[9] == 0) begin
+            if (!err) begin
               y_speed <= data_in;
               valid_3 <= 1'b1;
             end
