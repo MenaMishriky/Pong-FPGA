@@ -272,7 +272,7 @@ module PS2_interf_low_lvl(inout PS2_clk,
                          end
             state[TX_ERROR]: begin
                         //next state logic
-                        next_state[IDLE] = 1'b1;
+                        next_state[TX_PULL_CLK_L] = 1'b1;
                             
                       end 
             state[TX_ACK_RECEIVED]: begin
