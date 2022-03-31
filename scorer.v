@@ -29,13 +29,13 @@ module scorer(clk_100MHz, reset, score_A, score_B, seg);
     // Counters
     always @ (posedge score_A or posedge score_B or posedge reset) begin
       if (reset)  begin
-        score_A <= 0;
-        score_B <= 0;
+        score_A_int <= 0;
+        score_B_int <= 0;
       end
       else if (score_A)
-        score_A_int <= score_A_int + 1;
+        score_A_int <= score_A_int < 9 ? (score_A_int + 1) : 0;
       else
-        score_B_int <= score_B_int + 1;
+        score_B_int <= score_B_int < 9 ? (score_B_int + 1) : 0;
     end
 
     // Based on which enable is on, display the correct score give score_A or score_B or 10
@@ -46,8 +46,8 @@ module scorer(clk_100MHz, reset, score_A, score_B, seg);
     // SIM: Give clk, score_A, score_B, trigger for some amount of time
     always @ (enables or score_A or score_B) begin
       case (enables)
-        4'b1110 : score = score_B;
-        4'b0111 : score = score_A;
+        4'b1110 : score = score_B_int;                  // AI score_B on AN0
+        4'b0111 : score = score_A_int;                  // Player score_A on AN3
         default : score = 4'b1010;
       endcase
     end
