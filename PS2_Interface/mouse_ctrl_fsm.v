@@ -1,9 +1,9 @@
 module mouse_ctrl_fsm ( input wire clk_25MHz,
                     input wire reset,
                     input [10:0] rx_data,
-                    input data_available,
-                    input busy,
-                    input err,
+                    input wire data_flag,
+                    input wire busy,
+                    input wire err,
                     output reg y_dir,
                     output reg y_max_speed,
                     output reg [7:0] y_speed,
@@ -23,8 +23,8 @@ parameter INVALID_DATA = 'd8;
 
 // Constant hexadecimal values with start/stop bits and parity
 parameter ACK = 11'b11111110100;
-parameter RESET = 'hFF;
-parameter MOUSE_ID = 'h00;
+parameter RESET = 11'b11111111110;      // 'hFF
+parameter MOUSE_ID = 11'b11000000000;
 parameter BAT_OK = 'hAA;
 parameter EN_REPORTING = 11'b10111101000;
 
@@ -32,7 +32,6 @@ reg [3:0] state, next_state;
 reg [2:0] word_counter;
 reg valid_1, valid_2, valid_3;
 reg [10:0] data_in;                 // internal signal for rx_data assigned at IDLE_REPORTING state
-reg data_flag;
 
 // Assigning flags
 assign new_out = (state == WORD3);
@@ -49,14 +48,13 @@ end
 // next state logic
 always @* begin
   next_state = 3'bx;
-  data_flag = 1'b0;
   if (reset) begin
     next_state <= IDLE_RESET;
   end
   else begin
     case (state)
       IDLE_RESET: begin
-                  if ((data_in == MOUSE_ID) && data_flag)                next_state = BUSY_CHECK;
+                  if ((rx_data == MOUSE_ID) && data_flag)                next_state = BUSY_CHECK;
                   else                                                   next_state = IDLE_RESET;
       end
       BUSY_CHECK: begin
@@ -107,7 +105,6 @@ always @ (posedge reset or posedge clk_25MHz) begin
   // initialize variables
   if (reset) begin
     data_in <= 11'b10101010101;
-    data_flag <= 1'b0;
     word_counter <= 0;
     valid_1 <= 1'b0;
     valid_2 <= 1'b0;
@@ -118,7 +115,6 @@ always @ (posedge reset or posedge clk_25MHz) begin
   else begin
     // default values again
     data_in <= 11'b10101010101;
-    data_flag <= 1'b0;
     word_counter <= 0;
     valid_1 <= 1'b0;
     valid_2 <= 1'b0;
@@ -128,9 +124,11 @@ always @ (posedge reset or posedge clk_25MHz) begin
     case (next_state)
       IDLE_RESET: begin
                     // no sequential logic here
+                    data_in <= rx_data;
                   end
       BUSY_CHECK: begin
                     // no sequential logic here, waiting on inputs to update
+                    data_in <= rx_data;
                   end
       WRITE_F4: begin
                   // make F4_command = ENABLE_REPORTING
@@ -141,8 +139,10 @@ always @ (posedge reset or posedge clk_25MHz) begin
                 end
       IDLE_REPORTING: begin
                         // like a soft reset, getting ready to report words
+                        data_in <= rx_data;
                       end
       WORD1: begin
+              data_in <= rx_data;
               // check if bits 7, 6 (or bits 3, 4 depending on shifting) are 0,1 and parity bit = 0
               if ((data_in[3] == 0) && (data_in[4] == 1) && !err) begin
                 valid_1 <= 1'b1;
@@ -155,12 +155,14 @@ always @ (posedge reset or posedge clk_25MHz) begin
               word_counter <= 'd2; 
             end
       WORD2: begin
+              data_in <= rx_data;
               // don't care to check tho just move the state
               if (!err)                     valid_2 <= 1'b1;
               else                          valid_2 <= 1'b0;
               word_counter <= 'd3;
       end
       WORD3: begin
+            data_in <= rx_data;
             // new out is already flagged high when it reaches this state, may need to change it
             // check parity
             if (!err) begin

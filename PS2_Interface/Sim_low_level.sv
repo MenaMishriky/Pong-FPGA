@@ -337,7 +337,7 @@ module Sim_low_level( );
           else if ( i == 1)
             data = {packet.stop1, packet.P1, packet.X_speed, packet.start1};
           else
-            data = {packet.stop2, packet.P2, packet.Y_speed, packet.start2} ;
+            data = {packet.stop2, packet.P2, packet.Y_speed, packet.start2};
           
           fork
             mouse.send_packet(data);
@@ -444,7 +444,7 @@ module Sim_low_level( );
       mouse.PS2_data_in = PS2_data;
     end
     else begin
-      PS2_clk_drive = mouse.PS2_clk_out;//MODIFICATION ADD THAT
+      PS2_clk_drive = mouse.PS2_clk_out;
       mouse.PS2_data_in = PS2_data;
       mouse.PS2_clk_in = PS2_clk;
     end
