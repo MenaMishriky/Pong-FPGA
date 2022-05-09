@@ -67,7 +67,7 @@ always @* begin
                   else                                                   next_state = WRITE_F4;
       end 
       WAIT_ACK: begin
-                  if ((data_in == ACK) && data_flag)                     next_state = IDLE_REPORTING;
+                  if ((rx_data == ACK) && data_flag)                     next_state = IDLE_REPORTING;
                   else                                                   next_state = WAIT_ACK;
       end
       IDLE_REPORTING: begin
